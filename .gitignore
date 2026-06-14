@@ -1,0 +1,56 @@
+# =========================
+# Project Specific
+# =========================
+
+# Ultralytics / YOLO
+runs/
+datasets/
+*.pt
+*.onnx
+*.engine
+*.torchscript
+yolo*.log
+
+# Weights & Biases
+wandb/
+
+# Data & Images
+_data/
+data/
+images/
+*.jpg
+*.jpeg
+*.png
+*.mp4
+
+# =========================
+# Environments & Secrets
+# =========================
+
+# Pixi Environment
+.pixi/
+
+# Secrets & Environment Variables (CRITICAL!)
+.env
+.env.*
+
+# =========================
+# Python & Jupyter
+# =========================
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb_checkpoints/
+
+# =========================
+# OS Generated
+# =========================
+
+.DS_Store
+Thumbs.db

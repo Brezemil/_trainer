@@ -1,0 +1,63 @@
+[workspace]
+name = "_trainer"
+version = "0.1.0"
+description = "YOLO & Geospatial Computer Vision Stack"
+authors = ["brezemil"]
+channels = ["pytorch", "nvidia", "conda-forge"]
+platforms = ["win-64", "linux-64"]
+
+[dependencies]
+# Core Runtime & Hardware (Tightened to protect FiftyOne)
+python = ">=3.10,<3.13"
+pytorch = ">=2.0.0"
+pytorch-cuda = "12.1.*" 
+torchvision = "*"
+
+# Data, Geospatial & ML Foundation
+pandas = ">=2.3.3,<4"
+numpy = ">=1.26.4,<3"
+scikit-learn = "*"
+scikit-image = "*"
+seaborn = "*"
+matplotlib = ">=3.9.1,<4"
+matplotlib-scalebar = ">=0.9.0,<0.10"
+geopandas = ">=0.14.4,<2"
+shapely = ">=2.0.1,<3"
+contextily = ">=1.7.0,<2"
+
+# MLOps & Experiment Tracking
+wandb = ">=0.19.0"
+codecarbon = ">=2.2.2,<3"
+nvidia-ml-py = ">=13.595.45,<14"
+
+# Interactive UI Components
+ipywidgets = ">=8.1.8,<9"
+anywidget = ">=0.10.0,<0.11"
+plotly = ">=6.6.0,<7"
+
+# Lower-level Core Utilities
+tqdm = "*"
+pillow = ">=9.4.0,<11"
+python-dotenv = "*"
+setuptools = "<70"
+pycocotools = ">=2.0.11,<3"
+
+[pypi-dependencies]
+# Vision Frameworks & Data Curation
+fiftyone = { version = ">=1.14.1,<2", extras = ["desktop"] }
+ultralytics = ">=8.3.0"
+sahi = "*"                       # Sliced Aided Hyper Inference (Great for large aerial/satellite imagery)
+albumentations = "*"             # Advanced augmentations
+
+# App Utilities & Annotation SDKs
+opencv-python = "*" 
+label-studio-sdk = ">=0.0.13"
+email-validator = ">=2.0.0"
+folium = "*"
+
+[tasks]
+wandb-login = "wandb login"
+check-gpu = "python -c \"import torch; print(f'PyTorch {torch.__version__} | CUDA Available: {torch.cuda.is_available()} | Device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \\'None\\'}')\""
+check-yolo = "yolo checks"
+ide = "antigravity-ide"
+cli = "agy"
