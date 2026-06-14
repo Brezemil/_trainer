@@ -5,18 +5,20 @@ from dataclasses import dataclass
 class PipelineConfig:
     # W&B Core Setup
     entity: str = "brezemil"
-    project: str = "24jun_batch_200_v2_geostrat"
+    project: str = "_trainer"
     
     # Model & Data Paths
     model_variant: str = "yolo26s.pt"
-    dataset_path: str = r"C:\Users\emilb\_data\24jun_1024_batch200_v2_spl_slc\dataset.yaml"
+    dataset_path: str = r"C:\Users\emilb\_data\_smoketest\dataset.yaml"
     
     # Global Training Constraints
-    image_size: int = 1024
-    max_sweep_runs: int = 75
-    sweep_epochs: int = 50
+    image_size: int = 256
+    max_sweep_runs: int = 10 #75
+    sweep_epochs: int = 5 #50
     prod_epochs: int = 250
-    batch_size: int = -1  # Adjust manually if VRAM is exceeded
+    device: int = 0
+    batch_size: int = 4  # Adjust manually if VRAM is exceeded
+    
     
     # Fixed Loss Parameters (Baseline)
     fixed_loss: dict = None

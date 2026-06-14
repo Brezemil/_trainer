@@ -1,4 +1,12 @@
+# Inside your sweep.yaml file
 program: run_sweep.py
+command:
+  - ${env:PYTHONNOUSERSITE=1}
+  - pixi
+  - run
+  - python
+  - ${program}
+  - ${args}
 method: bayes
 metric:
   name: metrics/mAP50(B)

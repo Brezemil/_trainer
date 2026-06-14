@@ -164,4 +164,55 @@ best_hpo = PipelineConfig.get_best_sweep_config("hpo456def", "24jun_batch_200_v2
 
 ---
 
-Would you like me to add a dedicated section to this README outlining how to integrate automated Discord, Slack, or email notifications via W&B alerts when top-performing runs finish?
+Here is a clean, structured Markdown section that you can copy and paste directly into your `README.md`. It uses clear tables and diagrams to explain the architecture to anyone reading your repository.
+
+---
+
+```markdown
+## 🔄 Configuration Architecture & Data Flow
+
+This pipeline uses a split architecture: **W&B Sweeps (YAML)** define the theoretical search space, while the **Execution Script (`run_sweep.py`)** handles the local runtime implementation. 
+
+### The Data Lifecycle
+
+1. **The Blueprint (Server-Side):** The W&B Cloud Server reads your `.yaml` file to understand parameter boundaries and distributions, using its Bayesian optimization model to determine the next combination to test.
+2. **The Handshake:** Your local `wandb agent` fetches that single specific combination (e.g., `{"albu_spatial_p": 0.42, "phase": "augmentation"}`) via `wandb.init()`.
+3. **The Translation (Local-Side):** The `run_sweep.py` script takes those raw numbers and dynamically builds active Python objects (like Albumentations pipelines) and updates the Ultralytics training dictionary.
+
+---
+
+## 🛠️ Modifying the Search Space (Cheat Sheet)
+
+When expanding or altering your experiments, use this guide to determine whether you need to update the YAML configuration, the Python script, or both.
+
+| Modification Goal | Change YAML? | Change Python? | Why? |
+| :--- | :---: | :---: | :--- |
+| **Adjust Limits** <br>*(e.g., Changing `mixup` max from 0.3 to 0.5)* | **Yes** | **No** | The Python script dynamically ingests whatever value the W&B server sends. |
+| **Change Algorithms** <br>*(e.g., Switching from `bayes` to `random` search)* | **Yes** | **No** | Search strategies are managed entirely on the W&B server side. |
+| **Add New Native YOLO Params** <br>*(e.g., Sweeping `label_smoothing`)* | **Yes** | **No** | The script uses dictionary unpacking (`**hpo_params`) to automatically forward new keys to `model.train()`. |
+| **Add New Albumentations Effects** <br>*(e.g., Adding `A.RandomBrightnessContrast`)* | **Yes** | **Yes** | **YAML** must generate the probability variable, and **Python** must explicitly instantiate the new Albumentations class. |
+| **Modify Hardcoded Baseline Rules** <br>*(e.g., Changing the locked Stage 1 learning rate)* | **No** | **Yes** | These are frozen pipeline rules handled entirely within the execution logic routing. |
+
+### How to add a new Albumentations effect:
+
+If you want to add a new image manipulation step to the sweep, follow these two steps:
+
+1. **Update your YAML file** to register the new hyperparameter probability distribution:
+   ```yaml
+   parameters:
+     albu_brightness_p: {distribution: uniform, min: 0.0, max: 0.5}
+
+```
+
+2. **Update `run_sweep.py**` inside the `build_albumentations_pipeline` function to map that parameter to the active pipeline:
+```python
+# Inside build_albumentations_pipeline:
+A.RandomBrightnessContrast(p=config_dict.get("albu_brightness_p", 0.0))
+
+```
+
+
+
+```
+
+```

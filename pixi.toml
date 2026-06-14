@@ -6,6 +6,9 @@ authors = ["brezemil"]
 channels = ["pytorch", "nvidia", "conda-forge"]
 platforms = ["win-64", "linux-64"]
 
+[system-requirements]
+cuda = "12.1"
+
 [dependencies]
 # Core Runtime & Hardware (Tightened to protect FiftyOne)
 python = ">=3.10,<3.13"
@@ -57,7 +60,7 @@ folium = "*"
 
 [tasks]
 wandb-login = "wandb login"
-check-gpu = "python -c \"import torch; print(f'PyTorch {torch.__version__} | CUDA Available: {torch.cuda.is_available()} | Device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \\'None\\'}')\""
+check-gpu = { cmd = "python -c \"import torch; print(f'PyTorch {torch.__version__} | CUDA Available: {torch.cuda.is_available()} | Device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \\'None\\'}')\"", env = { PYTHONNOUSERSITE = "1" } }
 check-yolo = "yolo checks"
 ide = "antigravity-ide"
 cli = "agy"
