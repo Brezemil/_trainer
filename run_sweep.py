@@ -30,68 +30,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 #Optional: Mute PyTorch hardware warning logs in subprocesses
 os.environ["PYTHONWARNINGS"] = "ignore"
 
-
-def build_albumentations_pipeline(config_dict: Dict[str, Any], imgsz: int) -> List[Any]:
-    """
-    Dynamically constructs an Albumentations augmentation pipeline based on W&B sweep parameters.
-
-    Individual augmentations are parameterized with execution probabilities ('p') supplied 
-    via the configuration dictionary. If a parameter is not present in the sweep dictionary, 
-    the probability defaults to 0.0 (deactivated).
-
-    Args:
-        config_dict (Dict[str, Any]): Dictionary containing hyperparameters (e.g., probability limits).
-        imgsz (int): Target image width and height for spatial resizing crop operations.
-
-    Returns:
-        List[Any]: A list of instantiated Albumentations transformation objects ready to be 
-                   passed to the Ultralytics training pipeline.
-    """
-    return [
-        # Spatial transformations
-        A.RandomRotate90(p=config_dict.get("albu_spatial_p", 0.0)),
-        A.HorizontalFlip(p=config_dict.get("albu_spatial_p", 0.0)),
-        A.VerticalFlip(p=config_dict.get("albu_spatial_p", 0.0)),
-        A.Transpose(p=config_dict.get("albu_spatial_p", 0.0)),
-        
-        # Perspective & Warp transformations
-        A.OneOf([
-            A.GridDistortion(num_steps=5, distort_limit=0.05, p=1.0), 
-            A.Affine(shear=(-5, 5), p=1.0), 
-        ], p=config_dict.get("albu_warp_p", 0.0)),
-        
-        # Resizing and cropping
-        A.RandomResizedCrop(
-            size=(imgsz, imgsz), scale=(0.4, 1.0), ratio=(0.9, 1.1), p=config_dict.get("albu_crop_p", 0.0)
-        ),
-        
-        # Texture & Blur
-        A.OneOf([
-            A.Sharpen(alpha=(0.2, 0.5), p=1.0),
-            A.Blur(blur_limit=3, p=1.0),
-        ], p=config_dict.get("albu_texture_p", 0.0)),
-        
-        # Color adjustments
-        A.OneOf([
-            A.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05, p=1.0),
-            A.CLAHE(clip_limit=2.0, tile_grid_size=(8, 8), p=1.0),
-            A.ToGray(p=0.1), 
-            A.Solarize(threshold=128, p=0.05), 
-        ], p=config_dict.get("albu_color_p", 0.0)),
-        
-        # Coarse dropout (hole masking)
-        A.CoarseDropout(
-            num_holes_range=(8, 12), hole_height_range=(0.02, 0.05), 
-            hole_width_range=(0.02, 0.05), p=config_dict.get("albu_dropout_p", 0.0)
-        ),
-        
-        # Noise & Compression artifacts
-        A.OneOf([
-            A.GaussNoise(std_range=(0.02, 0.08), p=1.0),
-            A.ISONoise(color_shift=(0.01, 0.05), intensity=(0.1, 0.5), p=1.0),
-            A.ImageCompression(quality_range=(75, 100), p=1.0),
-        ], p=config_dict.get("albu_noise_p", 0.0)),
-    ]
+from eval_utils import build_albumentations_pipeline
 
 
 def main() -> None:
@@ -122,6 +61,8 @@ def main() -> None:
         "imgsz": cfg.image_size,
         "device": cfg.device,
         "batch": cfg.batch_size,
+        "workers": cfg.workers,
+        "fraction": cfg.fraction,
         "exist_ok": True,
         **cfg.fixed_loss
     }
@@ -169,8 +110,14 @@ def main() -> None:
         # Build Albumentations pipeline utilizing optimal probabilities from Phase 1
         train_kwargs["augmentations"] = build_albumentations_pipeline(best_aug_config, cfg.image_size)
 
-    # Initialize model and begin training
-    model = YOLO(cfg.model_variant)
+    # Initialize model and begin training. Use RTDETR class for RT-DETR models.
+    if "rtdetr" in cfg.model_variant.lower():
+        from ultralytics import RTDETR
+        print(f"Loading RT-DETR model: {cfg.model_variant}")
+        model = RTDETR(cfg.model_variant)
+    else:
+        print(f"Loading YOLO model: {cfg.model_variant}")
+        model = YOLO(cfg.model_variant)
     model.train(**train_kwargs)
     
     # Automatically tag top-performing runs on the W&B dashboard for easy filtering

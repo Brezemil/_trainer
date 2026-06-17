@@ -76,6 +76,18 @@ def parse_args() -> argparse.Namespace:
         default=None, 
         help="Override the wandb log directory."
     )
+    parser.add_argument(
+        "--aug-sweep-id", 
+        type=str, 
+        default=None, 
+        help="W&B sweep ID for Phase 1 (augmentation tuning)."
+    )
+    parser.add_argument(
+        "--hpo-sweep-id", 
+        type=str, 
+        default=None, 
+        help="W&B sweep ID for Phase 2 (HPO)."
+    )
     return parser.parse_args()
 
 def main() -> None:
@@ -109,6 +121,9 @@ def main() -> None:
     runs_dir = args.runs_dir if args.runs_dir is not None else cfg.runs_dir
     wandb_dir = args.wandb_dir if args.wandb_dir is not None else cfg.wandb_dir
     
+    aug_sweep_id = args.aug_sweep_id if args.aug_sweep_id is not None else cfg.aug_sweep_id
+    hpo_sweep_id = args.hpo_sweep_id if args.hpo_sweep_id is not None else cfg.hpo_sweep_id
+    
     # Resolve relative paths to absolute paths
     import os
     if not os.path.isabs(runs_dir):
@@ -116,6 +131,25 @@ def main() -> None:
     if not os.path.isabs(wandb_dir):
         wandb_dir = os.path.abspath(wandb_dir)
     
+    # Fetch best sweep configurations if sweep IDs are provided
+    best_aug_config = None
+    if aug_sweep_id:
+        print(f"\nFetching best configuration from augmentation sweep: {aug_sweep_id}...")
+        try:
+            best_aug_config = cfg.get_best_sweep_config(aug_sweep_id, cfg.project, cfg.entity)
+            print("Successfully loaded best augmentation configurations.")
+        except Exception as e:
+            print(f"Error fetching augmentation sweep config: {e}. Proceeding without sweep results.", file=sys.stderr)
+            
+    best_hpo_config = None
+    if hpo_sweep_id:
+        print(f"\nFetching best configuration from HPO sweep: {hpo_sweep_id}...")
+        try:
+            best_hpo_config = cfg.get_best_sweep_config(hpo_sweep_id, cfg.project, cfg.entity)
+            print("Successfully loaded best HPO configurations.")
+        except Exception as e:
+            print(f"Error fetching HPO sweep config: {e}. Proceeding without sweep results.", file=sys.stderr)
+            
     print("=" * 60)
     print("Starting stock training runs configuration:")
     print(f"Models: {models_to_train}")
@@ -131,6 +165,8 @@ def main() -> None:
     print(f"Dataset: {cfg.dataset_path}")
     print(f"W&B Entity: {cfg.entity}")
     print(f"W&B Project: {cfg.project}")
+    print(f"Aug Sweep ID: {aug_sweep_id}")
+    print(f"HPO Sweep ID: {hpo_sweep_id}")
     print("=" * 60)
     
     total_runs = len(models_to_train) * len(seeds_to_use)
@@ -139,12 +175,49 @@ def main() -> None:
     for model_name in models_to_train:
         for seed in seeds_to_use:
             model_base = model_name.replace(".pt", "")
-            run_name = f"{model_base}_seed_{seed}"
+            
+            # Construct run name with suffixes indicating sweep integration
+            suffix = ""
+            if aug_sweep_id and hpo_sweep_id:
+                suffix = "_best_aug_hpo"
+            elif aug_sweep_id:
+                suffix = "_best_aug"
+            elif hpo_sweep_id:
+                suffix = "_best_hpo"
+                
+            run_name = f"{model_base}_seed_{seed}{suffix}"
             
             print(f"\n[{run_idx}/{total_runs}] Initializing training for: {run_name}...")
             
             # Ensure wandb_dir exists
             os.makedirs(wandb_dir, exist_ok=True)
+            
+            # Prepare configuration dictionary for W&B
+            wb_run_config = {
+                "model": model_name,
+                "seed": seed,
+                "epochs": epochs,
+                "imgsz": imgsz,
+                "batch_size": batch_size,
+                "device": device,
+                "workers": workers,
+                "fraction": fraction,
+                "runs_dir": runs_dir,
+                "wandb_dir": wandb_dir,
+                "dataset": cfg.dataset_path,
+            }
+            if aug_sweep_id:
+                wb_run_config["aug_sweep_id"] = aug_sweep_id
+                if best_aug_config:
+                    for k, v in best_aug_config.items():
+                        if k.startswith("albu_") or k in ["mosaic", "mixup", "copy_paste"]:
+                            wb_run_config[f"best_aug_{k}"] = v
+            if hpo_sweep_id:
+                wb_run_config["hpo_sweep_id"] = hpo_sweep_id
+                if best_hpo_config:
+                    for k, v in best_hpo_config.items():
+                        if k in ["optimizer", "lr0", "lrf", "momentum", "weight_decay", "warmup_epochs"]:
+                            wb_run_config[f"best_hpo_{k}"] = v
             
             # Initialize W&B run cleanly
             run = wandb.init(
@@ -152,25 +225,14 @@ def main() -> None:
                 entity=cfg.entity,
                 name=run_name,
                 dir=wandb_dir,
-                config={
-                    "model": model_name,
-                    "seed": seed,
-                    "epochs": epochs,
-                    "imgsz": imgsz,
-                    "batch_size": batch_size,
-                    "device": device,
-                    "workers": workers,
-                    "fraction": fraction,
-                    "runs_dir": runs_dir,
-                    "wandb_dir": wandb_dir,
-                    "dataset": cfg.dataset_path,
-                },
+                config=wb_run_config,
                 reinit=True
             )
             
             try:
                 # Load the model variant. Use RTDETR class for RT-DETR models.
-                if "rtdetr" in model_name.lower():
+                is_rtdetr = "rtdetr" in model_name.lower()
+                if is_rtdetr:
                     from ultralytics import RTDETR
                     print(f"Loading RT-DETR model: {model_name}")
                     model = RTDETR(model_name)
@@ -178,20 +240,61 @@ def main() -> None:
                     print(f"Loading YOLO model: {model_name}")
                     model = YOLO(model_name)
                 
-                # Run the model training with stock settings, saving to runs_dir
-                model.train(
-                    data=cfg.dataset_path,
-                    epochs=epochs,
-                    imgsz=imgsz,
-                    device=device,
-                    batch=batch_size,
-                    seed=seed,
-                    workers=workers,
-                    fraction=fraction,
-                    project=runs_dir,
-                    name=run_name,
-                    exist_ok=True,
-                )
+                # Assemble training arguments
+                train_kwargs = {
+                    "data": cfg.dataset_path,
+                    "epochs": epochs,
+                    "imgsz": imgsz,
+                    "device": device,
+                    "batch": batch_size,
+                    "seed": seed,
+                    "workers": workers,
+                    "fraction": fraction,
+                    "project": runs_dir,
+                    "name": run_name,
+                    "exist_ok": True,
+                }
+                
+                # Apply fixed loss weights from baseline config to keep consistency
+                if cfg.fixed_loss:
+                    train_kwargs.update(cfg.fixed_loss)
+                    
+                if best_aug_config:
+                    # Disable default YOLO spatial/color augmentations to isolate sweep influence
+                    train_kwargs.update({
+                        "hsv_h": 0.0, "hsv_s": 0.0, "hsv_v": 0.0,
+                        "degrees": 0.0, "fliplr": 0.0, "flipud": 0.0,
+                        "scale": 0.0, "translate": 0.0, "shear": 0.0,
+                        "bgr": 0.0, "close_mosaic": 15
+                    })
+                    
+                    # Add native YOLO augmentations if they were swept and if this is a YOLO model
+                    if not is_rtdetr:
+                        native_augs = {
+                            "mosaic": best_aug_config.get("mosaic", 0.0),
+                            "mixup": best_aug_config.get("mixup", 0.0),
+                            "copy_paste": best_aug_config.get("copy_paste", 0.0)
+                        }
+                        train_kwargs.update(native_augs)
+                        
+                    # Build and inject custom Albumentations pipeline
+                    from eval_utils import build_albumentations_pipeline
+                    train_kwargs["augmentations"] = build_albumentations_pipeline(best_aug_config, imgsz)
+                    
+                if best_hpo_config:
+                    hpo_keys = ["optimizer", "lr0", "lrf", "momentum", "weight_decay", "warmup_epochs"]
+                    hpo_params = {k: best_hpo_config[k] for k in hpo_keys if k in best_hpo_config}
+                    train_kwargs.update(hpo_params)
+                    
+                print("Final training arguments:")
+                for k, v in train_kwargs.items():
+                    if k == "augmentations":
+                        print(f"  {k}: <custom Albumentations pipeline with {len(v)} stages>")
+                    else:
+                        print(f"  {k}: {v}")
+                
+                # Run the model training with assembled settings
+                model.train(**train_kwargs)
                 print(f"Successfully finished training run: {run_name}")
                 
                 # Evaluate on the test split using pycocotools

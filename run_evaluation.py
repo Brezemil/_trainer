@@ -61,6 +61,18 @@ def parse_args() -> argparse.Namespace:
         default=None, 
         help="Override the runs directory where training checkpoints are saved."
     )
+    parser.add_argument(
+        "--aug-sweep-id", 
+        type=str, 
+        default=None, 
+        help="W&B sweep ID for Phase 1 (augmentation tuning)."
+    )
+    parser.add_argument(
+        "--hpo-sweep-id", 
+        type=str, 
+        default=None, 
+        help="W&B sweep ID for Phase 2 (HPO)."
+    )
     return parser.parse_args()
 
 def main() -> None:
@@ -79,6 +91,18 @@ def main() -> None:
     workers = args.workers if args.workers is not None else cfg.workers
     runs_dir = args.runs_dir if args.runs_dir is not None else cfg.runs_dir
     
+    aug_sweep_id = args.aug_sweep_id if args.aug_sweep_id is not None else cfg.aug_sweep_id
+    hpo_sweep_id = args.hpo_sweep_id if args.hpo_sweep_id is not None else cfg.hpo_sweep_id
+    
+    # Construct suffix indicating sweep integration
+    suffix = ""
+    if aug_sweep_id and hpo_sweep_id:
+        suffix = "_best_aug_hpo"
+    elif aug_sweep_id:
+        suffix = "_best_aug"
+    elif hpo_sweep_id:
+        suffix = "_best_hpo"
+        
     # Resolve relative path to absolute
     if not os.path.isabs(runs_dir):
         runs_dir = os.path.abspath(runs_dir)
@@ -93,6 +117,8 @@ def main() -> None:
     print(f"Runs Directory: {runs_dir}")
     print(f"Dataset: {cfg.dataset_path}")
     print(f"Results Directory: {cfg.eval_results_dir}")
+    print(f"Aug Sweep ID: {aug_sweep_id}")
+    print(f"HPO Sweep ID: {hpo_sweep_id}")
     print("=" * 60)
     
     evaluated_count = 0
@@ -101,7 +127,7 @@ def main() -> None:
     for model_name in models_to_eval:
         for seed in seeds_to_use:
             model_base = model_name.replace(".pt", "")
-            run_name = f"{model_base}_seed_{seed}"
+            run_name = f"{model_base}_seed_{seed}{suffix}"
             
             # Locate checkpoint
             checkpoint_path = os.path.join(runs_dir, run_name, "weights", "best.pt")

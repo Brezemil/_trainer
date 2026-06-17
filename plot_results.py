@@ -43,8 +43,16 @@ def group_and_aggregate(results: List[Dict[str, Any]]) -> Dict[str, Dict[str, Di
         
         # Parse model base name and seed from run_name
         # E.g. "yolo11s_seed_42" -> model_base="yolo11s", seed="42"
+        # E.g. "yolo11s_seed_42_best_aug" -> model_base="yolo11s_best_aug", seed="42"
         if "_seed_" in run_name:
-            model_base, seed_str = run_name.rsplit("_seed_", 1)
+            parts = run_name.split("_seed_")
+            model_prefix = parts[0]
+            seed_and_suffix = parts[1].split("_", 1)
+            seed_str = seed_and_suffix[0]
+            if len(seed_and_suffix) > 1:
+                model_base = f"{model_prefix}_{seed_and_suffix[1]}"
+            else:
+                model_base = model_prefix
         else:
             model_base = run_name
             
@@ -188,6 +196,12 @@ def generate_markdown_summary(stats: Dict[str, Dict[str, Dict[str, float]]], sav
         
     print(f"\nSaved markdown evaluation summary to {summary_path}")
     print("\n" + "\n".join(lines) + "\n")
+    
+    # Save combined results to a JSON file
+    summary_json_path = os.path.join(save_dir, "evaluation_summary.json")
+    with open(summary_json_path, "w") as f:
+        json.dump(stats, f, indent=4)
+    print(f"Saved combined JSON evaluation summary to {summary_json_path}")
 
 def main() -> None:
     cfg = PipelineConfig()

@@ -1,0 +1,19 @@
+{
+    "model_variant": "unknown",
+    "run_name": "rtdetr-l_seed_100",
+    "split": "test",
+    "metrics": {
+        "AP": 4.511555717032049e-05,
+        "AP50": 0.0002933915914583445,
+        "AP75": 2.5650233417124096e-06,
+        "AP_small": 0.0,
+        "AP_medium": 0.0,
+        "AP_large": 9.214336372287032e-05,
+        "AR_max1": 0.0,
+        "AR_max10": 0.00125,
+        "AR_max100": 0.01125,
+        "AR_small": 0.0,
+        "AR_medium": 0.0,
+        "AR_large": 0.021176470588235293
+    }
+}

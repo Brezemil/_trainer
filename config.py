@@ -11,6 +11,10 @@ class PipelineConfig:
     model_variant: str = "yolo26s.pt"
     dataset_path: str = r"C:\Users\emilb\_data\_smoketest\dataset.yaml"
     
+    # Optional Sweep IDs to plug in
+    aug_sweep_id: str = None
+    hpo_sweep_id: str = None
+    
     # Global Training Constraints
     image_size: int = 128
     max_sweep_runs: int = 2 #75

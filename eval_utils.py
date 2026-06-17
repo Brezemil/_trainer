@@ -285,3 +285,55 @@ def evaluate_model_coco(
         print(f"Error cleaning up temp directory {temp_val_path}: {e}")
         
     return metrics
+
+def build_albumentations_pipeline(config_dict: Dict[str, Any], imgsz: int) -> List[Any]:
+    """
+    Dynamically constructs an Albumentations augmentation pipeline based on configurations.
+    """
+    import albumentations as A
+    return [
+        # Spatial orientation (crucial for UAV top-down tree crown detection)
+        A.RandomRotate90(p=config_dict.get("albu_rotate90_p", 0.0)),
+        A.Transpose(p=config_dict.get("albu_rotate90_p", 0.0)),
+        A.HorizontalFlip(p=config_dict.get("albu_spatial_p", 0.0)),
+        A.VerticalFlip(p=config_dict.get("albu_spatial_p", 0.0)),
+        
+        # Perspective & Warp transformations (kept low to prevent unrealistic crown distortion)
+        A.OneOf([
+            A.GridDistortion(num_steps=5, distort_limit=0.05, p=1.0), 
+            A.Affine(shear=(-5, 5), p=1.0), 
+        ], p=config_dict.get("albu_warp_p", 0.0)),
+        
+        # Resizing and cropping (handles varying drone altitudes/scales)
+        A.RandomResizedCrop(
+            size=(imgsz, imgsz), scale=(0.4, 1.0), ratio=(0.9, 1.1), p=config_dict.get("albu_crop_p", 0.0)
+        ),
+        
+        # Texture & Blur (simulates camera focus blur and wind shake)
+        A.OneOf([
+            A.Sharpen(alpha=(0.2, 0.5), p=1.0),
+            A.Blur(blur_limit=3, p=1.0),
+        ], p=config_dict.get("albu_texture_p", 0.0)),
+        
+        # Color & Lighting adjustments (simulates shadows and sun angle variations)
+        A.OneOf([
+            A.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05, p=1.0),
+            A.CLAHE(clip_limit=2.0, tile_grid_size=(8, 8), p=1.0),
+            A.RandomShadow(shadow_roi=(0, 0, 1, 1), num_shadows_lower=1, num_shadows_upper=2, shadow_dimension=5, p=1.0),
+            A.ToGray(p=0.1), 
+            A.Solarize(threshold=128, p=0.05), 
+        ], p=config_dict.get("albu_color_p", 0.0)),
+        
+        # Coarse dropout (hole masking)
+        A.CoarseDropout(
+            num_holes_range=(8, 12), hole_height_range=(0.02, 0.05), 
+            hole_width_range=(0.02, 0.05), p=config_dict.get("albu_dropout_p", 0.0)
+        ),
+        
+        # Noise & Sensor compression artifacts (ISO noise from varied camera sensors)
+        A.OneOf([
+            A.GaussNoise(std_range=(0.02, 0.08), p=1.0),
+            A.ISONoise(color_shift=(0.01, 0.05), intensity=(0.1, 0.5), p=1.0),
+            A.ImageCompression(quality_range=(75, 100), p=1.0),
+        ], p=config_dict.get("albu_noise_p", 0.0)),
+    ]

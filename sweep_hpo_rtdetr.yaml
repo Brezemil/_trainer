@@ -1,0 +1,25 @@
+program:run_sweep.py
+command:
+  - ${env:PYTHONNOUSERSITE=1}
+  - pixi
+  - run
+  - python
+  - ${program}
+  - ${args}
+method: bayes
+metric:
+  name: metrics/mAP50(B)
+  goal: maximize
+early_terminate:
+  type: hyperband
+  min_iter: 10
+parameters:
+  phase:
+    value: "hpo"
+  prev_aug_sweep_id:
+    value: "abc123xyz" # Inject Phase 1 sweep ID here
+  optimizer: {values: ["AdamW", "Adam"]}
+  lr0: {distribution: log_uniform_values, min: 0.0001, max: 0.005}
+  lrf: {distribution: uniform, min: 0.01, max: 0.1}
+  weight_decay: {distribution: uniform, min: 0.0001, max: 0.001}
+  warmup_epochs: {distribution: uniform, min: 0.5, max: 2.0}
