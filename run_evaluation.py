@@ -153,6 +153,13 @@ def main() -> None:
                 evaluated_count += 1
             except Exception as e:
                 print(f"Error evaluating {run_name}: {e}", file=sys.stderr)
+            finally:
+                # Free GPU memory to prevent memory accumulation across sequential runs
+                import gc
+                import torch
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
                 
     print(f"\nEvaluation complete. Evaluated: {evaluated_count}, Missing: {missing_count}")
 

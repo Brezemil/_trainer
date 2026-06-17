@@ -8,7 +8,7 @@ class PipelineConfig:
     project: str = "_trainer"
     
     # Model & Data Paths
-    model_variant: str = "yolo26s.pt"
+    model_variant: str = "yolo26s.pt" #this model will receive the HPO!
     dataset_path: str = r"C:\Users\emilb\_data\_smoketest\dataset.yaml"
     
     # Optional Sweep IDs to plug in
@@ -16,17 +16,18 @@ class PipelineConfig:
     hpo_sweep_id: str = None
     
     # Global Training Constraints
-    image_size: int = 128
-    max_sweep_runs: int = 2 #75
-    sweep_epochs: int = 5 #50
-    prod_epochs: int = 5 #250
+    image_size: int = 640
+    max_sweep_runs: int = 1 #75
+    sweep_epochs: int = 1 #50
+    prod_epochs: int = 1 #250
     device: int = 0
-    batch_size: int = 16  # Adjust manually if VRAM is exceeded
+    batch_size: int = 2  # Adjust manually if VRAM is exceeded
     workers: int = 0      # Set to 0 to prevent multiprocessing shared memory issues on Windows
     fraction: float = 1.0 # Fraction of dataset to train on (e.g. 0.01 for 1% data)
+    amp: bool = True      # Set to False if GPU float16 operations cause NaN losses
     
     # Stock Training Settings (Models & Seeds)
-    models: tuple = ("yolo11s.pt", "yolo26s.pt", "rtdetr-l.pt")
+    models: tuple = ("yolo11n.pt", "yolo26n.pt", "rtdetr-l.pt")
     seeds: tuple = (42, 100, 999)
     runs_dir: str = "runs"
     wandb_dir: str = "wandb"

@@ -78,7 +78,7 @@ def group_and_aggregate(results: List[Dict[str, Any]]) -> Dict[str, Dict[str, Di
     return stats
 
 def plot_ap_comparison(stats: Dict[str, Dict[str, Dict[str, float]]], save_dir: str) -> None:
-    """Generates a bar plot of AP and AP50 with standard deviation error bars."""
+    """Generates a bar plot of AP, AP50, and AP75 with standard deviation error bars."""
     models = list(stats.keys())
     if not models:
         print("No models found to plot.")
@@ -89,17 +89,22 @@ def plot_ap_comparison(stats: Dict[str, Dict[str, Dict[str, float]]], save_dir: 
     
     ap50_means = [stats[m]["AP50"]["mean"] for m in models]
     ap50_stds = [stats[m]["AP50"]["std"] for m in models]
+
+    ap75_means = [stats[m]["AP75"]["mean"] for m in models]
+    ap75_stds = [stats[m]["AP75"]["std"] for m in models]
     
     x = np.arange(len(models))
-    width = 0.35
+    width = 0.25
     
     sns.set_theme(style="whitegrid")
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(11, 6))
     
-    rects1 = ax.bar(x - width/2, ap_means, width, yerr=ap_stds, label='mAP@0.50:0.95', 
-                    capsize=5, color='#4A90E2', edgecolor='black', alpha=0.9)
-    rects2 = ax.bar(x + width/2, ap50_means, width, yerr=ap50_stds, label='mAP@0.50', 
-                    capsize=5, color='#50E3C2', edgecolor='black', alpha=0.9)
+    rects1 = ax.bar(x - width, ap_means, width, yerr=ap_stds, label='mAP@0.50:0.95', 
+                    capsize=4, color='#4A90E2', edgecolor='black', alpha=0.9)
+    rects2 = ax.bar(x, ap50_means, width, yerr=ap50_stds, label='mAP@0.50', 
+                    capsize=4, color='#50E3C2', edgecolor='black', alpha=0.9)
+    rects3 = ax.bar(x + width, ap75_means, width, yerr=ap75_stds, label='mAP@0.75', 
+                    capsize=4, color='#F5A623', edgecolor='black', alpha=0.9)
     
     ax.set_ylabel('Score')
     ax.set_title('Strict COCO AP Metrics Comparison (Mean ± Std across Seeds)')
@@ -115,16 +120,124 @@ def plot_ap_comparison(stats: Dict[str, Dict[str, Dict[str, float]]], save_dir: 
                         xy=(rect.get_x() + rect.get_width() / 2, height),
                         xytext=(0, 3),  # 3 points vertical offset
                         textcoords="offset points",
-                        ha='center', va='bottom', fontsize=9, fontweight='semibold')
+                        ha='center', va='bottom', fontsize=8, fontweight='semibold')
                         
     autolabel(rects1)
     autolabel(rects2)
+    autolabel(rects3)
     
     fig.tight_layout()
     plot_path = os.path.join(save_dir, "ap_metrics_comparison.png")
     plt.savefig(plot_path, dpi=300)
     plt.close()
     print(f"Saved AP comparison plot to {plot_path}")
+
+def plot_scale_comparison(stats: Dict[str, Dict[str, Dict[str, float]]], save_dir: str) -> None:
+    """Generates a bar plot comparing AP_small, AP_medium, and AP_large."""
+    models = list(stats.keys())
+    if not models:
+        return
+        
+    ap_s_means = [stats[m]["AP_small"]["mean"] for m in models]
+    ap_s_stds = [stats[m]["AP_small"]["std"] for m in models]
+    
+    ap_m_means = [stats[m]["AP_medium"]["mean"] for m in models]
+    ap_m_stds = [stats[m]["AP_medium"]["std"] for m in models]
+
+    ap_l_means = [stats[m]["AP_large"]["mean"] for m in models]
+    ap_l_stds = [stats[m]["AP_large"]["std"] for m in models]
+    
+    x = np.arange(len(models))
+    width = 0.25
+    
+    sns.set_theme(style="whitegrid")
+    fig, ax = plt.subplots(figsize=(11, 6))
+    
+    rects1 = ax.bar(x - width, ap_s_means, width, yerr=ap_s_stds, label='AP (Small)', 
+                    capsize=4, color='#E28490', edgecolor='black', alpha=0.9)
+    rects2 = ax.bar(x, ap_m_means, width, yerr=ap_m_stds, label='AP (Medium)', 
+                    capsize=4, color='#9B51E0', edgecolor='black', alpha=0.9)
+    rects3 = ax.bar(x + width, ap_l_means, width, yerr=ap_l_stds, label='AP (Large)', 
+                    capsize=4, color='#27AE60', edgecolor='black', alpha=0.9)
+    
+    ax.set_ylabel('Score')
+    ax.set_title('Strict COCO AP by Object Scale (Mean ± Std across Seeds)')
+    ax.set_xticks(x)
+    ax.set_xticklabels(models)
+    ax.legend()
+    
+    def autolabel(rects):
+        for rect in rects:
+            height = rect.get_height()
+            ax.annotate(f'{height:.4f}',
+                        xy=(rect.get_x() + rect.get_width() / 2, height),
+                        xytext=(0, 3),
+                        textcoords="offset points",
+                        ha='center', va='bottom', fontsize=8, fontweight='semibold')
+                        
+    autolabel(rects1)
+    autolabel(rects2)
+    autolabel(rects3)
+    
+    fig.tight_layout()
+    plot_path = os.path.join(save_dir, "ap_scale_comparison.png")
+    plt.savefig(plot_path, dpi=300)
+    plt.close()
+    print(f"Saved AP scale comparison plot to {plot_path}")
+
+def plot_ar_comparison(stats: Dict[str, Dict[str, Dict[str, float]]], save_dir: str) -> None:
+    """Generates a bar plot comparing AR_max1, AR_max10, and AR_max100."""
+    models = list(stats.keys())
+    if not models:
+        return
+        
+    ar1_means = [stats[m]["AR_max1"]["mean"] for m in models]
+    ar1_stds = [stats[m]["AR_max1"]["std"] for m in models]
+    
+    ar10_means = [stats[m]["AR_max10"]["mean"] for m in models]
+    ar10_stds = [stats[m]["AR_max10"]["std"] for m in models]
+
+    ar100_means = [stats[m]["AR_max100"]["mean"] for m in models]
+    ar100_stds = [stats[m]["AR_max100"]["std"] for m in models]
+    
+    x = np.arange(len(models))
+    width = 0.25
+    
+    sns.set_theme(style="whitegrid")
+    fig, ax = plt.subplots(figsize=(11, 6))
+    
+    rects1 = ax.bar(x - width, ar1_means, width, yerr=ar1_stds, label='AR @ 1 max det', 
+                    capsize=4, color='#F2994A', edgecolor='black', alpha=0.9)
+    rects2 = ax.bar(x, ar10_means, width, yerr=ar10_stds, label='AR @ 10 max det', 
+                    capsize=4, color='#EB5757', edgecolor='black', alpha=0.9)
+    rects3 = ax.bar(x + width, ar100_means, width, yerr=ar100_stds, label='AR @ 100 max det', 
+                    capsize=4, color='#2F80ED', edgecolor='black', alpha=0.9)
+    
+    ax.set_ylabel('Score')
+    ax.set_title('Strict COCO Average Recall (AR) Comparison (Mean ± Std across Seeds)')
+    ax.set_xticks(x)
+    ax.set_xticklabels(models)
+    ax.legend()
+    
+    def autolabel(rects):
+        for rect in rects:
+            height = rect.get_height()
+            ax.annotate(f'{height:.4f}',
+                        xy=(rect.get_x() + rect.get_width() / 2, height),
+                        xytext=(0, 3),
+                        textcoords="offset points",
+                        ha='center', va='bottom', fontsize=8, fontweight='semibold')
+                        
+    autolabel(rects1)
+    autolabel(rects2)
+    autolabel(rects3)
+    
+    fig.tight_layout()
+    plot_path = os.path.join(save_dir, "ar_metrics_comparison.png")
+    plt.savefig(plot_path, dpi=300)
+    plt.close()
+    print(f"Saved AR comparison plot to {plot_path}")
+
 
 def plot_individual_seeds(stats: Dict[str, Dict[str, Dict[str, float]]], save_dir: str) -> None:
     """Generates a scatter/swarm plot showing individual seed scores for each model."""
@@ -222,6 +335,8 @@ def main() -> None:
     
     # Generate outputs
     plot_ap_comparison(stats, eval_dir)
+    plot_scale_comparison(stats, eval_dir)
+    plot_ar_comparison(stats, eval_dir)
     plot_individual_seeds(stats, eval_dir)
     generate_markdown_summary(stats, eval_dir)
 

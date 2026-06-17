@@ -88,6 +88,12 @@ def parse_args() -> argparse.Namespace:
         default=None, 
         help="W&B sweep ID for Phase 2 (HPO)."
     )
+    parser.add_argument(
+        "--amp", 
+        type=str, 
+        default=None, 
+        help="Enable/disable Automatic Mixed Precision (AMP) (True/False)."
+    )
     return parser.parse_args()
 
 def main() -> None:
@@ -123,6 +129,10 @@ def main() -> None:
     
     aug_sweep_id = args.aug_sweep_id if args.aug_sweep_id is not None else cfg.aug_sweep_id
     hpo_sweep_id = args.hpo_sweep_id if args.hpo_sweep_id is not None else cfg.hpo_sweep_id
+    
+    amp = cfg.amp
+    if args.amp is not None:
+        amp = args.amp.lower() in ("true", "1", "yes")
     
     # Resolve relative paths to absolute paths
     import os
@@ -253,10 +263,11 @@ def main() -> None:
                     "project": runs_dir,
                     "name": run_name,
                     "exist_ok": True,
+                    "amp": amp,
                 }
                 
-                # Apply fixed loss weights from baseline config to keep consistency
-                if cfg.fixed_loss:
+                # Apply fixed loss weights if we are plugging in sweeps to keep consistency with the sweep environment
+                if (aug_sweep_id or hpo_sweep_id) and cfg.fixed_loss:
                     train_kwargs.update(cfg.fixed_loss)
                     
                 if best_aug_config:
@@ -315,6 +326,16 @@ def main() -> None:
             finally:
                 # Close the W&B run
                 wandb.finish()
+                
+                # Free GPU memory to prevent memory accumulation across sequential runs
+                if "model" in locals():
+                    del model
+                import gc
+                import torch
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                
                 run_idx += 1
 
     print("\nAll training runs complete!")

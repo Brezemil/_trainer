@@ -64,6 +64,7 @@ def main() -> None:
         "workers": cfg.workers,
         "fraction": cfg.fraction,
         "exist_ok": True,
+        "amp": cfg.amp,
         **cfg.fixed_loss
     }
 

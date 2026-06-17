@@ -63,6 +63,7 @@ All tasks are registered in `pixi.toml` and can be invoked using the `pixi run <
     * `--wandb-dir`: Save W&B metadata files under a custom folder.
     * `--aug-sweep-id`: W&B sweep ID from Phase 1 (Augmentation Tuning) to plug in.
     * `--hpo-sweep-id`: W&B sweep ID from Phase 2 (HPO) to plug in.
+    * `--amp`: Enable/disable Automatic Mixed Precision (AMP) (`True`/`False`). Useful for resolving NaN loss issues on specific mobile GPUs.
   * *Plug-in Sweep Naming Convention (W&B):*
     * If only `--aug-sweep-id` is provided, runs are named: `{model_base}_seed_{seed}_best_aug`
     * If only `--hpo-sweep-id` is provided, runs are named: `{model_base}_seed_{seed}_best_hpo`
@@ -115,6 +116,7 @@ All global parameters, models to run, seeds, and logging directories are central
 * **`eval_results_dir`**: Folder where validation results are saved.
 * **`aug_sweep_id`**: Optional default W&B sweep ID for Phase 1 (Augmentation).
 * **`hpo_sweep_id`**: Optional default W&B sweep ID for Phase 2 (HPO).
+* **`amp`**: Default Automatic Mixed Precision (AMP) setting (default: `True`). Set to `False` to avoid NaN losses during training.
 * **Path Resolution Rules:** Relative paths inside `config.py` automatically resolve relative to the project root directory containing `config.py`. Absolute paths are used as-is, making configuration across different PCs easy.
 
 ---
@@ -269,17 +271,28 @@ Execute sweeps in W&B to find the best hyperparameters (using YOLO as an example
 
 #### Step 5: Run training suite again with sweep parameters plugged in
 **DO NOT delete or move the baseline logs in `evaluation_results/`.** Leaving them in place is required so the plotter can access both sets of results and compare them.
-Run the training command passing both sweep IDs (and omit the `--seed` flag so it runs over all seeds):
+
+> [!IMPORTANT]
+> **Sweep Model Targeting:** Since YOLO and RT-DETR have different parameter spaces and architectures (e.g. YOLO uses native mosaic/mixup, whereas RT-DETR relies solely on Albumentations and AdamW learning rates), a sweep ID is specific to a model family. When plugging in a sweep ID, you should target the training run to the matching model variant using the `--model` flag:
+> * For YOLO: `pixi run train --model yolo26s.pt --aug-sweep-id <yolo_sweep_id> --hpo-sweep-id <yolo_hpo_id>`
+> * For RT-DETR: `pixi run train --model rtdetr-l.pt --aug-sweep-id <rtdetr_sweep_id> --hpo-sweep-id <rtdetr_hpo_id>`
+
+Run the training command passing the sweep IDs and specifying the target model (omit the `--seed` flag so it runs over all seeds):
 ```bash
-pixi run train --aug-sweep-id aug123 --hpo-sweep-id hpo456
+pixi run train --model yolo26s.pt --aug-sweep-id aug123 --hpo-sweep-id hpo456
 ```
-* **What happens:** Trains the configured models using the optimized augmentations and learning settings over all seeds, saving files like `yolo26s_seed_42_best_aug_hpo_coco_metrics.json`.
+* **What happens:** Trains the targeted model using the optimized augmentations and learning settings over all configured seeds, saving files like `yolo26s_seed_42_best_aug_hpo_coco_metrics.json`.
+
 
 #### Step 6: Generate the comparative plots
 ```bash
 pixi run plot
 ```
-* **What happens:** The plotter loads **both** the baseline metric files and the sweep-optimized metric files. It aggregates the seeds for each configuration separately and generates side-by-side comparison bars showing the exact performance uplift (e.g. comparing `yolo26s` vs `yolo26s_best_aug_hpo`).
+* **What happens:** The plotter loads **both** the baseline metric files and the sweep-optimized metric files, aggregates the seeds for each configuration (mean ± std), and generates four publication-ready comparison charts:
+  1. **Strict AP Metrics Comparison (`ap_metrics_comparison.png`)**: Side-by-side comparison bars for `mAP@0.50:0.95`, `mAP@0.50`, and `mAP@0.75` with standard deviation error bars.
+  2. **Scale-wise AP Comparison (`ap_scale_comparison.png`)**: Compares average precision on Small, Medium, and Large objects (`AP_small`, `AP_medium`, `AP_large`) to analyze scale-specific performance.
+  3. **Average Recall Comparison (`ar_metrics_comparison.png`)**: Compares average recall scores at different detection limits (`AR@1`, `AR@10`, `AR@100`).
+  4. **Seed Score Distribution Swarmplot (`ap_seed_distribution.png`)**: Shows the spread of individual seed runs to visualize variance.
 
 ---
 
@@ -367,7 +380,13 @@ Loads all JSON metric files matching `*_coco_metrics.json` inside the evaluation
 Groups metric dictionary objects by model variant base name, parses their seeds, and calculates the mean and standard deviation for each COCO metric.
 
 #### `plot_ap_comparison(stats: dict, save_dir: str)`
-Generates a bar plot comparing mAP@0.50:0.95 and mAP@0.50 across model variants. Includes error bars reflecting the standard deviation across seeds. Saves to `ap_metrics_comparison.png`.
+Generates a bar plot comparing mAP@0.50:0.95, mAP@0.50, and mAP@0.75 across model variants. Includes error bars reflecting standard deviation across seeds. Saves to `ap_metrics_comparison.png`.
+
+#### `plot_scale_comparison(stats: dict, save_dir: str)`
+Generates a bar plot comparing AP_small, AP_medium, and AP_large across model variants with error bars. Saves to `ap_scale_comparison.png`.
+
+#### `plot_ar_comparison(stats: dict, save_dir: str)`
+Generates a bar plot comparing AR@1, AR@10, and AR@100 across model variants with error bars. Saves to `ar_metrics_comparison.png`.
 
 #### `plot_individual_seeds(stats: dict, save_dir: str)`
 Generates a strip/swarm plot showing individual point scores for each seed run to visualize variance. Saves to `ap_seed_distribution.png`.
