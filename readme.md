@@ -59,6 +59,7 @@ All tasks are registered in `pixi.toml` and can be invoked using the `pixi run <
     * `--device`: Override device (e.g. `0` or `cpu`).
     * `--imgsz`: Override image size (e.g. `256`).
     * `--workers`: Override dataloader workers count.
+    * `--fraction`: Override dataset fraction (e.g., `0.01` for a 1% data smoketest).
     * `--runs-dir`: Save runs under a custom folder.
     * `--wandb-dir`: Save W&B metadata files under a custom folder.
   * *Example:*
@@ -86,6 +87,7 @@ All global parameters, models to run, seeds, and logging directories are central
 * **`entity`** / **`project`**: Your W&B usernames/projects.
 * **`models`**: Tuple of model weights to train/evaluate (default: `("yolo11s.pt", "yolo26s.pt", "rtdetr-l.pt")`).
 * **`seeds`**: Tuple of fixed seeds to run (default: `(42, 100, 999)`).
+* **`fraction`**: Default dataset fraction (default: `1.0`).
 * **`runs_dir`**: Folder where model checkpoints are saved.
 * **`wandb_dir`**: Folder where W&B logs are saved.
 * **`eval_results_dir`**: Folder where validation results are saved.
@@ -176,7 +178,7 @@ Entry point for sweep training runs. Configures settings, initializes W&B, disab
 ### 📄 `run_training.py`
 
 #### `parse_args() -> argparse.Namespace`
-Sets up the command-line argument parser, defining options to override default models, seeds, epochs, batches, image sizes, devices, dataloader workers count, runs directory, and wandb directory.
+Sets up the command-line argument parser, defining options to override default models, seeds, epochs, batches, image sizes, devices, dataloader workers count, dataset fraction, runs directory, and wandb directory.
 
 #### `main()`
 Primary training execution logic:

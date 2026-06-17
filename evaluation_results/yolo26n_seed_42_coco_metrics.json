@@ -1,5 +1,5 @@
 {
-    "model_variant": "C:\\Users\\emilb\\_trainer\\runs\\yolo26n_seed_42\\weights\\best.pt",
+    "model_variant": "unknown",
     "run_name": "yolo26n_seed_42",
     "split": "test",
     "metrics": {

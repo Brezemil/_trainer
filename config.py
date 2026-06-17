@@ -19,6 +19,7 @@ class PipelineConfig:
     device: int = 0
     batch_size: int = 16  # Adjust manually if VRAM is exceeded
     workers: int = 0      # Set to 0 to prevent multiprocessing shared memory issues on Windows
+    fraction: float = 1.0 # Fraction of dataset to train on (e.g. 0.01 for 1% data)
     
     # Stock Training Settings (Models & Seeds)
     models: tuple = ("yolo11s.pt", "yolo26s.pt", "rtdetr-l.pt")

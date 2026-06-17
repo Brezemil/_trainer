@@ -59,6 +59,12 @@ def parse_args() -> argparse.Namespace:
         help="Override the number of dataloader workers."
     )
     parser.add_argument(
+        "--fraction", 
+        type=float, 
+        default=None, 
+        help="Override the fraction of dataset to train on (e.g. 0.01 for 1%% of data)."
+    )
+    parser.add_argument(
         "--runs-dir", 
         type=str, 
         default=None, 
@@ -99,6 +105,7 @@ def main() -> None:
     device = args.device if args.device is not None else cfg.device
     imgsz = args.imgsz if args.imgsz is not None else cfg.image_size
     workers = args.workers if args.workers is not None else cfg.workers
+    fraction = args.fraction if args.fraction is not None else cfg.fraction
     runs_dir = args.runs_dir if args.runs_dir is not None else cfg.runs_dir
     wandb_dir = args.wandb_dir if args.wandb_dir is not None else cfg.wandb_dir
     
@@ -118,6 +125,7 @@ def main() -> None:
     print(f"Image Size: {imgsz}")
     print(f"Device: {device}")
     print(f"Workers: {workers}")
+    print(f"Dataset Fraction: {fraction}")
     print(f"Runs Dir: {runs_dir}")
     print(f"W&B Dir: {wandb_dir}")
     print(f"Dataset: {cfg.dataset_path}")
@@ -152,6 +160,7 @@ def main() -> None:
                     "batch_size": batch_size,
                     "device": device,
                     "workers": workers,
+                    "fraction": fraction,
                     "runs_dir": runs_dir,
                     "wandb_dir": wandb_dir,
                     "dataset": cfg.dataset_path,
@@ -178,6 +187,7 @@ def main() -> None:
                     batch=batch_size,
                     seed=seed,
                     workers=workers,
+                    fraction=fraction,
                     project=runs_dir,
                     name=run_name,
                     exist_ok=True,
