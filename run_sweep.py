@@ -17,6 +17,18 @@ import wandb
 import albumentations as A
 from ultralytics import YOLO, settings
 from config import PipelineConfig
+import os
+import warnings
+
+#Suppress Python warnings (silences the torchvision warning)
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", message=".*torchvision.*")
+
+#Suppress the pynvml/PyTorch internal FutureWarnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+
+#Optional: Mute PyTorch hardware warning logs in subprocesses
+os.environ["PYTHONWARNINGS"] = "ignore"
 
 
 def build_albumentations_pipeline(config_dict: Dict[str, Any], imgsz: int) -> List[Any]:

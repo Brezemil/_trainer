@@ -1,18 +1,18 @@
-# Multi-Stage YOLO Hyperparameter Optimization Pipeline with W&B
+# Multi-Stage YOLO HPO & Training Pipeline with W&B
 
-This repository contains a two-stage hyperparameter optimization (HPO) pipeline for Ultralytics YOLO models using Weights & Biases (W&B) sweeps and Albumentations.
-
-By separating the search space into an **Augmentation Phase (Stage 1)** and a **Learning Parameter Phase (Stage 2)**, we drastically reduce compute time and avoid a combinatorial explosion.
+This repository contains a unified environment for training, hyperparameter optimization (HPO), strict COCO evaluation, and plotting for Ultralytics YOLO models (specifically supporting YOLO11, YOLO26, and RT-DETR) using Weights & Biases (W&B) and Albumentations.
 
 ---
 
 ## 📋 Table of Contents
 
-1. [Prerequisites & Setup](https://www.google.com/search?q=%23-prerequisites--setup)
-2. [Configuration Single Source of Truth (`config.py`)](https://www.google.com/search?q=%231-configuration-single-source-of-truth)
-3. [Stage 1: Augmentation Sweep](https://www.google.com/search?q=%23-stage-1-augmentation-sweep)
-4. [Stage 2: Learning Parameters (HPO) Sweep](https://www.google.com/search?q=%23-stage-2-learning-parameters-hpo-sweep)
-5. [Stage 3: Deploying to Production](https://www.google.com/search?q=%23-stage-3-deploying-to-production)
+1. [Prerequisites & Setup](#prerequisites--setup)
+2. [CLI Reference (Available Commands)](#cli-reference-available-commands)
+3. [Configuration Single Source of Truth (`config.py`)](#configuration-single-source-of-truth-configpy)
+4. [Unified HPO Sweep Pipeline (Stage 1 & 2)](#unified-hpo-sweep-pipeline-stage-1--2)
+5. [Stock Settings Training Suite](#stock-settings-training-suite)
+6. [Evaluation & Plotting Suite](#evaluation--plotting-suite)
+7. [Codebase API Reference (Detailed Functions)](#codebase-api-reference-detailed-functions)
 
 ---
 
@@ -21,198 +21,200 @@ By separating the search space into an **Augmentation Phase (Stage 1)** and a **
 Ensure you have the required packages installed and are logged into your Weights & Biases account:
 
 ```bash
-pip install ultralytics wandb albumentations
+pip install ultralytics wandb albumentations pycocotools
 wandb login
-
 ```
 
 ### File Structure
 
-Your project directory should look like this:
-
 ```text
-├── config.py          # Centralized configuration paths and helpers
-├── run_sweep.py       # Unified execution script for both sweeps
-├── sweep_aug.yaml     # Phase 1 configuration (Augmentations)
-└── sweep_hpo.yaml     # Phase 2 configuration (Learning Parameters)
-
+├── config.py            # Centralized configuration paths and helpers
+├── eval_utils.py        # YOLO-to-COCO translation and pycocotools evaluation
+├── run_sweep.py         # Unified execution script for both sweeps
+├── run_training.py      # Script to run stock training + evaluation
+├── run_evaluation.py    # Script to run evaluation on existing checkpoints
+├── plot_results.py      # Script to aggregate metrics across seeds and plot
+├── sweep_aug.yaml       # Phase 1 configuration (Augmentations)
+└── sweep_hpo.yaml       # Phase 2 configuration (Learning Parameters)
 ```
 
 ---
 
-## 🛠️ Step-by-Step Execution Guide
+## 💻 CLI Reference (Available Commands)
 
-### 1. Configure Your Environment (`config.py`)
+All tasks are registered in `pixi.toml` and can be invoked using the `pixi run <command>` syntax:
 
-Open `config.py` and modify the following variables inside the `PipelineConfig` class to match your setup:
+### 🛠️ Hardware & Environment Checks
+* **`pixi run check-gpu`**: Verifies PyTorch/CUDA installation and GPU availability on the system.
+* **`pixi run check-yolo`**: Runs the Ultralytics environment diagnosis checks.
+* **`pixi run wandb-login`**: Prompts the W&B API login flow to link your machine.
 
-* **`entity`**: Your W&B username or team name (e.g., `"brezemil"`).
-* **`project`**: The name of your W&B project (e.g., `"24jun_batch_200_v2_geostrat"`).
-* **`dataset_path`**: The absolute local path to your dataset's `dataset.yaml` file.
-* **`model_variant`**: The starting YOLO base weights (e.g., `"yolo26s.pt"`).
+### 🚀 Training Command
+* **`pixi run train`**: Runs the entire training suite. By default, it trains YOLO11s, YOLO26s, and RT-DETR-l sequentially, 3 times each, using fixed seeds ($42, 100, 999$). Each run is immediately evaluated on the test set using `pycocotools`.
+  * *Parameters:*
+    * `--model`: Train a specific model only (e.g. `yolo11s.pt`).
+    * `--seed`: Train with a specific seed only (e.g. `42`).
+    * `--epochs`: Override default epochs (e.g. `20`).
+    * `--batch`: Override default batch size (e.g. `32`).
+    * `--device`: Override device (e.g. `0` or `cpu`).
+    * `--imgsz`: Override image size (e.g. `256`).
+    * `--workers`: Override dataloader workers count.
+    * `--runs-dir`: Save runs under a custom folder.
+    * `--wandb-dir`: Save W&B metadata files under a custom folder.
+  * *Example:*
+    ```bash
+    pixi run train --model yolo26s.pt --seed 42 --epochs 50 --batch 32
+    ```
 
----
+### 📊 Standalone Evaluation
+* **`pixi run eval`**: Runs strict COCO evaluation on existing checkpoints (`best.pt`) found under `runs/{run_name}/`.
+  * *Parameters:* Accepts the same command-line parameter overrides as the training script (e.g. `--model`, `--seed`, `--runs-dir`).
+  * *Example:*
+    ```bash
+    pixi run eval --model yolo11s.pt --seed 100
+    ```
 
-### 2. Run Stage 1: Augmentation Sweep
-
-In this stage, learning parameters are locked to recommended baseline values while W&B searches for the optimal geometric, warping, and color augmentations.
-
-#### Step A: Initialize the Sweep
-
-Run the following command in your terminal to register the sweep with the W&B server:
-
-```bash
-wandb sweep sweep_aug.yaml
-
-```
-
-#### Step B: Capture the Sweep ID
-
-The terminal output will display a unique string looking like this:
-
-```text
-wandb: Creating sweep from: sweep_aug.yaml
-wandb: Created sweep with ID: abc123xyz
-wandb: View sweep at: https://wandb.ai/brezemil/24jun_batch_200_v2_geostrat/sweeps/abc123xyz
-
-```
-
-👉 **Copy the generated 9-character ID (`abc123xyz`).** This is your **Stage 1 Sweep ID**.
-
-#### Step C: Start the Sweep Agents
-
-Launch one or more local agents to execute the training runs:
-
-```bash
-wandb agent brezemil/24jun_batch_200_v2_geostrat/abc123xyz
-
-```
-
-*(Replace `brezemil`, `24jun_batch_200_v2_geostrat`, and `abc123xyz` with your actual W&B entity, project name, and Stage 1 Sweep ID).*
+### 📈 Aggregation & Plotting
+* **`pixi run plot`**: Reads all saved metric JSON files from the evaluation results directory, aggregates seeds (mean ± std) per model variant, writes a summary markdown table, and generates comparison charts.
 
 ---
 
-### 3. Run Stage 2: Learning Parameters (HPO) Sweep
+## 🛠️ Configuration Single Source of Truth (`config.py`)
 
-Once Stage 1 finishes, you will lock down the best discovered augmentation parameters and sweep across learning parameters like learning rates, momentum, and optimizers.
+All global parameters, models to run, seeds, and logging directories are centralized in `config.py` using `PipelineConfig`:
 
-#### Step A: Link Stage 1 to Stage 2
-
-Open your **`sweep_hpo.yaml`** file and find the `prev_aug_sweep_id` parameter. Paste your Stage 1 Sweep ID into the `value` field:
-
-```yaml
-parameters:
-  phase:
-    value: "hpo"
-  prev_aug_sweep_id:
-    value: "abc123xyz"  # 👈 PASTE YOUR STAGE 1 SWEEP ID HERE
-
-```
-
-#### Step B: Initialize the Phase 2 Sweep
-
-Run the following command to register the second sweep config:
-
-```bash
-wandb sweep sweep_hpo.yaml
-
-```
-
-#### Step C: Capture the New Sweep ID
-
-W&B will return a brand new unique ID for Stage 2:
-
-```text
-wandb: Created sweep with ID: hpo456def
-
-```
-
-👉 **Copy this new ID (`hpo456def`).** This is your **Stage 2 Sweep ID**.
-
-#### Step D: Start Phase 2 Sweep Agents
-
-Launch your agents to execute the HPO training runs:
-
-```bash
-wandb agent brezemil/24jun_batch_200_v2_geostrat/hpo456def
-
-```
+* **`entity`** / **`project`**: Your W&B usernames/projects.
+* **`models`**: Tuple of model weights to train/evaluate (default: `("yolo11s.pt", "yolo26s.pt", "rtdetr-l.pt")`).
+* **`seeds`**: Tuple of fixed seeds to run (default: `(42, 100, 999)`).
+* **`runs_dir`**: Folder where model checkpoints are saved.
+* **`wandb_dir`**: Folder where W&B logs are saved.
+* **`eval_results_dir`**: Folder where validation results are saved.
+* **Path Resolution Rules:** Relative paths inside `config.py` automatically resolve relative to the project root directory containing `config.py`. Absolute paths are used as-is, making configuration across different PCs easy.
 
 ---
 
-### 4. Production Deployment
+## 🔄 Unified HPO Sweep Pipeline (Stage 1 & 2)
 
-After completing both sweeps, you are ready to train your final, full-length production model combining the best of both worlds.
+Sweeps use W&B's server-side Bayesian search to optimize augmentation (Stage 1) and learning parameters (Stage 2).
 
-To run a static, standalone production run without launching a sweep agent, you can extract your optimal parameters cleanly by using the built-in API helper in Python or running a manual override command:
+### Stage 1: Augmentation Sweep
+Locks learning parameters to baselines while searching over geometric/color augmentations.
+1. Initialize the sweep with W&B:
+   ```bash
+   wandb sweep sweep_aug.yaml
+   ```
+2. Note the generated **Stage 1 Sweep ID** (e.g. `abc123xyz`).
+3. Start local sweep agents to execute training:
+   ```bash
+   wandb agent <entity>/<project>/abc123xyz
+   ```
 
-```python
-from config import PipelineConfig
-
-# Fetch the ultimate configuration maps automatically
-best_augs = PipelineConfig.get_best_sweep_config("abc123xyz", "24jun_batch_200_v2_geostrat", "brezemil")
-best_hpo = PipelineConfig.get_best_sweep_config("hpo456def", "24jun_batch_200_v2_geostrat", "brezemil")
-
-```
-
----
-
-## 💡 Troubleshooting & Notes
-
-> 📌 **VRAM Out of Memory (OOM):** If your GPU runs out of VRAM processing heavy $1024 \times 1024$ images, open `config.py` and change `batch_size: int = -1` to a fixed lower value like `16` or `8`.
-> 📌 **Kill Active Agents:** To stop a sweep agent early, press `Ctrl + C` in the terminal window. The agent will finish its current epoch safely before exiting.
-
----
-
-Here is a clean, structured Markdown section that you can copy and paste directly into your `README.md`. It uses clear tables and diagrams to explain the architecture to anyone reading your repository.
-
----
-
-```markdown
-## 🔄 Configuration Architecture & Data Flow
-
-This pipeline uses a split architecture: **W&B Sweeps (YAML)** define the theoretical search space, while the **Execution Script (`run_sweep.py`)** handles the local runtime implementation. 
-
-### The Data Lifecycle
-
-1. **The Blueprint (Server-Side):** The W&B Cloud Server reads your `.yaml` file to understand parameter boundaries and distributions, using its Bayesian optimization model to determine the next combination to test.
-2. **The Handshake:** Your local `wandb agent` fetches that single specific combination (e.g., `{"albu_spatial_p": 0.42, "phase": "augmentation"}`) via `wandb.init()`.
-3. **The Translation (Local-Side):** The `run_sweep.py` script takes those raw numbers and dynamically builds active Python objects (like Albumentations pipelines) and updates the Ultralytics training dictionary.
-
----
-
-## 🛠️ Modifying the Search Space (Cheat Sheet)
-
-When expanding or altering your experiments, use this guide to determine whether you need to update the YAML configuration, the Python script, or both.
-
-| Modification Goal | Change YAML? | Change Python? | Why? |
-| :--- | :---: | :---: | :--- |
-| **Adjust Limits** <br>*(e.g., Changing `mixup` max from 0.3 to 0.5)* | **Yes** | **No** | The Python script dynamically ingests whatever value the W&B server sends. |
-| **Change Algorithms** <br>*(e.g., Switching from `bayes` to `random` search)* | **Yes** | **No** | Search strategies are managed entirely on the W&B server side. |
-| **Add New Native YOLO Params** <br>*(e.g., Sweeping `label_smoothing`)* | **Yes** | **No** | The script uses dictionary unpacking (`**hpo_params`) to automatically forward new keys to `model.train()`. |
-| **Add New Albumentations Effects** <br>*(e.g., Adding `A.RandomBrightnessContrast`)* | **Yes** | **Yes** | **YAML** must generate the probability variable, and **Python** must explicitly instantiate the new Albumentations class. |
-| **Modify Hardcoded Baseline Rules** <br>*(e.g., Changing the locked Stage 1 learning rate)* | **No** | **Yes** | These are frozen pipeline rules handled entirely within the execution logic routing. |
-
-### How to add a new Albumentations effect:
-
-If you want to add a new image manipulation step to the sweep, follow these two steps:
-
-1. **Update your YAML file** to register the new hyperparameter probability distribution:
+### Stage 2: HPO Sweep
+Retrieves the best augmentation configuration from Stage 1, locks them, and sweeps across learning parameters (e.g. learning rate, momentum, optimizer).
+1. Open `sweep_hpo.yaml` and update the `prev_aug_sweep_id` parameter value to your Stage 1 Sweep ID:
    ```yaml
-   parameters:
-     albu_brightness_p: {distribution: uniform, min: 0.0, max: 0.5}
+   prev_aug_sweep_id:
+     value: "abc123xyz"
+   ```
+2. Initialize and run:
+   ```bash
+   wandb sweep sweep_hpo.yaml
+   wandb agent <entity>/<project>/<hpo_sweep_id>
+   ```
 
-```
+---
 
-2. **Update `run_sweep.py**` inside the `build_albumentations_pipeline` function to map that parameter to the active pipeline:
-```python
-# Inside build_albumentations_pipeline:
-A.RandomBrightnessContrast(p=config_dict.get("albu_brightness_p", 0.0))
+## 📚 Codebase API Reference (Detailed Functions)
 
-```
+### 📄 `config.py`
 
+#### `class PipelineConfig` (Dataclass)
+Defines all global parameters, dataset paths, training parameters, model types, seeds, and logging targets.
+* **`__post_init__(self)`**:
+  - Initializes baseline fixed loss dictionary `{"box": 5.63, "cls": 0.56, "dfl": 9.04}`.
+  - Automatically resolves `runs_dir`, `wandb_dir`, and `eval_results_dir` to absolute paths relative to the folder containing `config.py` if they are defined as relative paths.
+* **`get_best_sweep_config(sweep_id: str, project: str, entity: str) -> dict`** (Static Method):
+  - Fetches the hyperparameter configuration of the best-performing run (sorted by `metrics/mAP50-95(B)`) from a completed W&B sweep using the W&B API. Strips internal keys starting with `_`.
 
+---
 
-```
+### 📄 `eval_utils.py`
 
-```
+#### `parse_dataset_yaml(dataset_yaml_path: str) -> dict`
+Parses the dataset configuration YAML file and returns its content as a Python dictionary.
+
+#### `generate_coco_gt(dataset_yaml_path: str, split: str, save_path: str) -> str`
+Converts a split (e.g. `test` or `val`) of a YOLO-formatted dataset (containing images and `.txt` label files) into a single, standard COCO ground-truth JSON file.
+- Checks if the file already exists at `save_path` and skips generation if so.
+- Maps YOLO 0-indexed categories to COCO 1-indexed categories (`cls_id + 1`).
+- Resolves relative paths defined in `dataset.yaml` to absolute paths.
+- Computes absolute pixel bounding boxes `[x_min, y_min, width, height]` from normalized center coordinates.
+
+#### `evaluate_model_coco(...)`
+Main evaluation wrapper function. Runs the following steps:
+1. Resolves `eval_results_dir` to an absolute path.
+2. Instantiates the model (uses `RTDETR` if the weights name contains `rtdetr`, otherwise `YOLO`).
+3. Runs the Ultralytics validation logic: `model.val()` with `save_json=True` in a temporary folder.
+4. Generates the split ground-truth COCO JSON using `generate_coco_gt()`.
+5. Loads `predictions.json`, maps string image IDs to integer IDs, and saves them to a mapped JSON file.
+6. Initializes `pycocotools.coco.COCO` and runs `pycocotools.cocoeval.COCOeval` to compute strict AP/AR metrics.
+7. Saves results as `{run_name}_coco_metrics.json`.
+8. Deletes the temporary validation directory to keep the workspace clean.
+
+---
+
+### 📄 `run_sweep.py`
+
+#### `build_albumentations_pipeline(config_dict: dict, imgsz: int) -> list`
+Constructs an active Albumentations transformation pipeline (e.g. Rotate, Flips, GridDistortion, Sharpen, ISONoise) using execution probabilities passed from the W&B sweep agent. Returns a list of transformation objects.
+
+#### `main()`
+Entry point for sweep training runs. Configures settings, initializes W&B, disables native YOLO augmentations (to evaluate Albumentations custom probabilities in isolation), resolves the sweep phase (`augmentation` or `hpo`), instantiates the model, executes training, and finishes cleanly.
+
+---
+
+### 📄 `run_training.py`
+
+#### `parse_args() -> argparse.Namespace`
+Sets up the command-line argument parser, defining options to override default models, seeds, epochs, batches, image sizes, devices, dataloader workers count, runs directory, and wandb directory.
+
+#### `main()`
+Primary training execution logic:
+1. Iterates over selected models and seeds.
+2. Formats a unique `run_name` (`{model_base}_seed_{seed}`).
+3. Initializes a W&B run targeting the configurable `wandb_dir`.
+4. Instantiates `YOLO` or `RTDETR` and trains the model saving checkpoints to `runs_dir`.
+5. Immediately calls `evaluate_model_coco()` from `eval_utils` to run strict COCO test evaluation.
+6. Shuts down the W&B run cleanly.
+
+---
+
+### 📄 `run_evaluation.py`
+
+#### `parse_args() -> argparse.Namespace`
+Sets up CLI arguments for standalone evaluation (accepts the same overrides as the training script).
+
+#### `main()`
+Checks the configured `runs_dir` for training checkpoints (`runs/{run_name}/weights/best.pt`) and executes the strict COCO validation split evaluation on them sequentially without retraining.
+
+---
+
+### 📄 `plot_results.py`
+
+#### `load_metrics(eval_dir: str) -> list`
+Loads all JSON metric files matching `*_coco_metrics.json` inside the evaluation results directory.
+
+#### `group_and_aggregate(results: list) -> dict`
+Groups metric dictionary objects by model variant base name, parses their seeds, and calculates the mean and standard deviation for each COCO metric.
+
+#### `plot_ap_comparison(stats: dict, save_dir: str)`
+Generates a bar plot comparing mAP@0.50:0.95 and mAP@0.50 across model variants. Includes error bars reflecting the standard deviation across seeds. Saves to `ap_metrics_comparison.png`.
+
+#### `plot_individual_seeds(stats: dict, save_dir: str)`
+Generates a strip/swarm plot showing individual point scores for each seed run to visualize variance. Saves to `ap_seed_distribution.png`.
+
+#### `generate_markdown_summary(stats: dict, save_dir: str)`
+Renders a markdown table detailing the aggregated mean ± std scores for all 12 COCO metrics across the models, saving it to `evaluation_summary.md`.
+
+#### `main()`
+Entry point for plotting. Loads metrics, groups them, runs the plotting routines, and writes the summary table.

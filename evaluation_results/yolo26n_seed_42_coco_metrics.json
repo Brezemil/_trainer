@@ -1,0 +1,19 @@
+{
+    "model_variant": "C:\\Users\\emilb\\_trainer\\runs\\yolo26n_seed_42\\weights\\best.pt",
+    "run_name": "yolo26n_seed_42",
+    "split": "test",
+    "metrics": {
+        "AP": 0.00016750586630984775,
+        "AP50": 0.001165601981537468,
+        "AP75": 1.9674098557396722e-05,
+        "AP_small": 0.0,
+        "AP_medium": 1.3609608383518764e-05,
+        "AP_large": 0.0003335126170777553,
+        "AR_max1": 0.000625,
+        "AR_max10": 0.001875,
+        "AR_max100": 0.035625,
+        "AR_small": 0.0,
+        "AR_medium": 0.0027397260273972603,
+        "AR_large": 0.06470588235294117
+    }
+}

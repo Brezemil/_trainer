@@ -14,7 +14,7 @@ cuda = "12.1"
 python = ">=3.10,<3.13"
 pytorch = ">=2.0.0"
 pytorch-cuda = "12.1.*" 
-torchvision = "*"
+torchvision = "0.20.*"
 
 # Data, Geospatial & ML Foundation
 pandas = ">=2.3.3,<4"
@@ -62,5 +62,8 @@ folium = "*"
 wandb-login = "wandb login"
 check-gpu = { cmd = "python -c \"import torch; print(f'PyTorch {torch.__version__} | CUDA Available: {torch.cuda.is_available()} | Device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \\'None\\'}')\"", env = { PYTHONNOUSERSITE = "1" } }
 check-yolo = "yolo checks"
+train = "python run_training.py"
+eval = "python run_evaluation.py"
+plot = "python plot_results.py"
 ide = "antigravity-ide"
 cli = "agy"
